@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Owner Dashboard</title>
+
+<style>
+body{font-family:Arial,sans-serif;background:#f7f7f7;margin:0}
+header{background:#d70f64;color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:20px}
+header button{padding:8px 12px;border:none;border-radius:6px;background:#fff;color:#d70f64;cursor:pointer}
+.badge{background:#fff;color:#d70f64;border-radius:50%;padding:2px 8px;font-weight:bold}
+
+main{padding:16px}
+section{margin-bottom:24px}
+h2{margin-top:0}
+
+.product{background:#fff;padding:14px;border-radius:10px;margin-bottom:12px;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer}
+.instock{background:#2ecc71;color:#fff;}
+.outstock{background:#e74c3c;color:#fff;}
+
+.stats{display:flex;gap:16px;flex-wrap:wrap}
+.stats div{background:#fff;padding:12px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.1);flex:1;min-width:150px;text-align:center}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Owner Dashboard</h1>
+  <button id="ordersBtn">
+    Orders <span id="msgCount" class="badge">0</span>
+  </button>
+</header>
+
+<audio id="sound">
+  <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3">
+</audio>
+
+<main>
+
+<section>
+  <h2>Stock Control</h2>
+  <div id="products"></div>
+</section>
+
+<section>
+  <h2>Sales Statistics</h2>
+  <div class="stats">
+    <div>Pickup Orders<br><strong id="pickupCount">0</strong></div>
+    <div>Delivery Orders<br><strong id="deliveryCount">0</strong></div>
+    <div>Today Sales<br>₱<strong id="todaySales">0</strong></div>
+    <div>Month Sales<br>₱<strong id="monthSales">0</strong></div>
+  </div>
+  <br>
+  <button onclick="downloadToday()">Download Today CSV</button>
+  <button onclick="downloadMonth()">Download Month CSV</button>
+</section>
+
+<section>
+  <h2>New Orders</h2>
+  <div id="orders"></div>
+</section>
+
+</main>
+
+<script>
+/* ===== DAILY RESET ===== */
+const todayKey = new Date().toISOString().slice(0,10);
+const lastDay = localStorage.getItem('lastOrderDay');
+if (lastDay !== todayKey) {
+  localStorage.setItem('orders', JSON.stringify([]));
+  localStorage.setItem('lastOrderDay', todayKey);
+}
+
+/* ===== PRODUCTS ===== */
+let products = JSON.parse(localStorage.getItem('products')) || [
+  {id:1,name:'Big Siomai',price:10,stock:500,available:true},
+  {id:2,name:'Gulaman',price:10,stock:500,available:true},
+  {id:3,name:'Fishball',price:10,stock:500,available:true},
+  {id:4,name:'Kikiam',price:10,stock:500,available:true}
+];
+
+const productsDiv=document.getElementById('products');
+
+function saveProducts(){
+  localStorage.setItem('products',JSON.stringify(products));
+}
+
+function toggleStock(id){
+  const p = products.find(x => x.id === id);
+  if(p.available){
+    p.available = false;
+    p.stock = 0;
+  } else {
+    p.available = true;
+    if(p.stock === 0) p.stock = 10; // default stock when toggled to in-stock
+  }
+  saveProducts();
+  renderProducts();
+}
+
+function renderProducts(){
+  productsDiv.innerHTML='';
+  products.forEach(p=>{
+    productsDiv.innerHTML+=`
+      <div class="product">
+        <strong>${p.name}</strong><br>
+        Price: ₱${p.price}<br>
+        Stock: <strong>${p.stock}</strong><br>
+        <div class="row">
+          <button class="${p.available ? 'instock':'outstock'}" onclick="toggleStock(${p.id})">
+            ${p.available ? 'IN STOCK' : 'OUT OF STOCK'}
+          </button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+/* ===== ORDERS ===== */
+let lastCount=0;
+const ordersDiv=document.getElementById('orders');
+const msgCount=document.getElementById('msgCount');
+
+function getOrders(){
+  return JSON.parse(localStorage.getItem('orders'))||[];
+}
+
+function updateStatus(orderId){
+  const orders = getOrders();
+  const order = orders.find(o => o.id === orderId);
+  if(!order) return;
+
+  if(order.mode === 'pickup'){
+    if(order.status === 'new') order.status = 'preparing';
+    else if(order.status === 'preparing') order.status = 'ready';
+  } else if(order.mode === 'delivery'){
+    if(order.status === 'new') order.status = 'preparing';
+    else if(order.status === 'preparing') order.status = 'ready';
+    else if(order.status === 'ready') order.status = 'received';
+  }
+
+  localStorage.setItem('orders', JSON.stringify(orders));
+  renderOrders();
+}
+
+function renderOrders(){
+  const orders = getOrders();
+  const newOrders = orders.filter(o => o.status !== 'received');
+
+  ordersDiv.innerHTML = '';
+  newOrders.forEach(o => {
+    let label = '';
+    if(o.mode === 'pickup'){
+      label = o.status === 'new' ? 'Preparing' : 'Ready';
+    } else if(o.mode === 'delivery'){
+      if(o.status === 'new') label = 'Preparing';
+      else if(o.status === 'preparing') label = 'Ready';
+      else if(o.status === 'ready') label = 'Order Received';
+    }
+
+    ordersDiv.innerHTML += `
+      <div class="product">
+        <strong>Order #${o.id}</strong><br>
+        Mode: ${o.mode}<br>
+        ${o.mode==='pickup' ? 'Customer: '+(o.customer||'N/A')+'<br>' : ''}
+        ${o.mode==='delivery' ? 'Phone: '+(o.phone||'N/A')+'<br>Address: '+(o.address||'N/A')+'<br>' : ''}
+        Items: ${o.items.map(i=>i.name+' x'+i.qty).join(', ')}<br>
+        Total: ₱${o.total}<br>
+        Status: <strong>${label}</strong><br>
+        <button onclick="updateStatus(${o.id})">Next Status</button>
+      </div>
+    `;
+  });
+
+  msgCount.textContent = newOrders.length;
+
+  if(newOrders.length>lastCount){
+    sound.play();
+  }
+  lastCount=newOrders.length;
+}
+
+/* ===== STATS ===== */
+function renderStats(){
+  const orders=getOrders();
+  const today=new Date().toISOString().slice(0,10);
+  const month=new Date().toISOString().slice(0,7);
+
+  let pickup=0,delivery=0,todayTotal=0,monthTotal=0;
+
+  orders.forEach(o=>{
+    if(o.mode==='pickup') pickup++;
+    else delivery++;
+    if(o.date.slice(0,10)===today) todayTotal+=o.total;
+    if(o.date.slice(0,7)===month) monthTotal+=o.total;
+  });
+
+  pickupCount.textContent=pickup;
+  deliveryCount.textContent=delivery;
+  todaySales.textContent=todayTotal;
+  monthSales.textContent=monthTotal;
+}
+
+/* ===== CSV ===== */
+function downloadCSV(list,name){
+  let csv='OrderID,Mode,Total,Items,Date\n';
+  list.forEach(o=>{
+    csv+=`${o.id},${o.mode},${o.total},"${o.items.map(i=>i.name+' x'+i.qty).join('|')}",${o.date}\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+}
+
+function downloadToday(){
+  const t=new Date().toISOString().slice(0,10);
+  downloadCSV(getOrders().filter(o=>o.date.slice(0,10)===t),'today_orders.csv');
+}
+
+function downloadMonth(){
+  const m=new Date().toISOString().slice(0,7);
+  downloadCSV(getOrders().filter(o=>o.date.slice(0,7)===m),'month_orders.csv');
+}
+
+ordersBtn.onclick=()=>{
+  const orders=getOrders();
+  orders.forEach(o=>o.status='seen');
+  localStorage.setItem('orders',JSON.stringify(orders));
+  renderOrders();
+};
+
+setInterval(()=>{
+  renderProducts();
+  renderOrders();
+  renderStats();
+},3000);
+
+renderProducts();
+renderOrders();
+renderStats();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jhundel Siomai House</title>
+
+<style>
+*{box-sizing:border-box;font-family:Inter,Arial,sans-serif}
+body{margin:0;background:#f7f7f7;color:#222}
+header{background:#d70f64;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:16px}
+header h1{font-size:20px;margin:0}
+.search{flex:1}
+.search input{width:100%;padding:10px 12px;border-radius:8px;border:none}
+
+.container{display:grid;grid-template-columns:260px 1fr 320px;gap:16px;padding:16px}
+.card{background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.sidebar{padding:16px}
+.badge{background:#d70f64;color:#fff;border-radius:999px;padding:6px 12px;display:inline-block}
+
+.menu{padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.item{padding:12px}
+.item img{width:100%;height:120px;object-fit:cover;border-radius:12px}
+.item h4{margin:10px 0 6px}
+.item button{width:100%;margin-top:8px;background:#d70f64;color:#fff;border:none;border-radius:10px;padding:10px}
+.item button:disabled{background:#ccc}
+
+.cart{position:sticky;top:16px}
+.cart-inner{padding:16px}
+.row{display:flex;justify-content:space-between;margin:6px 0}
+.checkout{background:#d70f64;color:#fff;border:none;border-radius:12px;padding:12px;width:100%;margin-top:10px}
+
+.toggle{display:flex;gap:8px;margin-bottom:10px}
+.toggle button{flex:1;border-radius:10px;border:1px solid #ddd;padding:8px}
+.toggle .on{background:#d70f64;color:#fff;border-color:#d70f64}
+
+.out{color:red;font-weight:600}
+
+@media(max-width:900px){
+.container{grid-template-columns:1fr}
+.cart{position:static}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Jhundel Siomai House</h1>
+  <div class="search">
+    <input placeholder="Search product…" oninput="search(this.value)">
+  </div>
+</header>
+
+<div class="container">
+
+  <aside class="card sidebar">
+    <span class="badge">Your trust in us is our most precious asset 💖</span>
+  </aside>
+
+  <main class="card menu">
+    <h3>Menu</h3>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <aside class="card cart">
+    <div class="cart-inner">
+      <h3>Your Cart</h3>
+
+      <div class="toggle">
+        <button id="pickupBtn" class="on" onclick="setMode('pickup')">Pickup</button>
+        <button id="deliveryBtn" onclick="setMode('delivery')">Delivery (+₱10)</button>
+      </div>
+
+      <div id="cart"></div>
+
+      <div id="pickupForm">
+        <input id="customerName" placeholder="Your Name"
+        style="width:100%;padding:8px;border-radius:8px;border:1px solid #ddd">
+      </div>
+
+      <div id="deliveryForm" style="display:none">
+        <input id="phone" placeholder="Phone Number"
+        style="width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid #ddd">
+        <textarea id="address" placeholder="Delivery Address"
+        style="width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid #ddd"></textarea>
+      </div>
+
+      <div class="row">
+        <strong>Total</strong>
+        <strong id="total">₱0</strong>
+      </div>
+
+      <button class="checkout" onclick="checkout()">Place Order</button>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+/* ================= PRODUCTS ================= */
+let products = JSON.parse(localStorage.getItem('products')) || [
+  {id:1,name:'Big Siomai',price:10,stock:500,available:true,img:'https://i.pinimg.com/736x/c6/a4/f0/c6a4f0877889198fddc9b38ae5b40af1.jpg'},
+  {id:2,name:'Gulaman',price:10,stock:500,available:true,img:'https://i.pinimg.com/1200x/4e/89/f2/4e89f2c148319c0e6e3e6f37fc92643a.jpg'},
+  {id:3,name:'Fishball',price:10,stock:500,available:true,img:'https://i.pinimg.com/1200x/67/d6/73/67d6737b6602c1f1eca75846871474e6.jpg'},
+  {id:4,name:'Kikiam',price:10,stock:500,available:true,img:'https://i.pinimg.com/1200x/1c/69/1b/1c691b5ece0b9338ce3cb32b7ae73523.jpg'}
+];
+localStorage.setItem('products',JSON.stringify(products));
+
+let cart=[];
+let mode='pickup';
+let q='';
+
+function search(v){ q=v.toLowerCase(); render(); }
+
+function render(){
+  grid.innerHTML='';
+  products.filter(p=>p.name.toLowerCase().includes(q)).forEach(p=>{
+    const out = p.stock<=0 || !p.available;
+    grid.innerHTML+=`
+      <div class="item">
+        <img src="${p.img}">
+        <h4>${p.name}</h4>
+        <div class="row">
+          <span>₱${p.price}</span>
+          <span class="${out?'out':''}">${out?'UNAVAILABLE':'Stock '+p.stock}</span>
+        </div>
+        <button ${out?'disabled':''} onclick="add(${p.id})">Add to Cart</button>
+      </div>`;
+  });
+}
+
+function add(id){
+  const p=products.find(x=>x.id===id);
+  if(!p || p.stock<=0 || !p.available) return alert('Item unavailable');
+  p.stock--;
+  const c=cart.find(x=>x.id===id);
+  c?c.qty++:cart.push({id:p.id,name:p.name,price:p.price,qty:1});
+  localStorage.setItem('products',JSON.stringify(products));
+  render();renderCart();
+}
+
+function renderCart(){
+  cartDiv.innerHTML='';
+  let sum=0;
+  cart.forEach(c=>{
+    sum+=c.price*c.qty;
+    cartDiv.innerHTML+=`<div class="row"><span>${c.name} x${c.qty}</span><strong>₱${c.price*c.qty}</strong></div>`;
+  });
+  if(mode==='delivery') sum+=10;
+  total.textContent='₱'+sum;
+}
+
+function setMode(m){
+  mode=m;
+  pickupBtn.classList.toggle('on',m==='pickup');
+  deliveryBtn.classList.toggle('on',m==='delivery');
+  pickupForm.style.display=m==='pickup'?'block':'none';
+  deliveryForm.style.display=m==='delivery'?'block':'none';
+  renderCart();
+}
+
+function checkout(){
+  if(!cart.length) return alert('Cart empty');
+
+  if(mode==='pickup' && !customerName.value.trim()) return alert('Enter name');
+  if(mode==='delivery' && (!phone.value.trim() || !address.value.trim())) return alert('Phone & address required');
+
+  const orders=JSON.parse(localStorage.getItem('orders'))||[];
+  orders.push({
+    id:orders.length+1,
+    items:[...cart],
+    total:cart.reduce((s,i)=>s+i.price*i.qty,0)+(mode==='delivery'?10:0),
+    mode,
+    customer:customerName.value,
+    phone:phone.value,
+    address:address.value,
+    status:'new',
+    date:new Date().toISOString()
+  });
+
+  localStorage.setItem('orders',JSON.stringify(orders));
+  alert('Order sent!');
+
+  cart=[];
+  customerName.value='';
+  phone.value='';
+  address.value='';
+  render();renderCart();
+}
+
+render();renderCart();
+</script>
+
+</body>
+</html>
